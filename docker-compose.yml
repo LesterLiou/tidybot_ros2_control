@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  tidybot_env:
+    image: tidybot_perfect_env:latest
+    container_name: tidybot_humble_container
+    # 網路與 IPC 共享：直接共用外層 24.04 的網路協議棧與記憶體通道，這對 Phoenix 與馬達握手至關重要
+    network_mode: "host"
+    pid: "host"
+    ipc: "host"
+    privileged: true
+    
+    # 全功能解鎖：防止 Linux 核心安全機制（seccomp）攔截容器內 Phoenix 的底層 Socket 呼叫
+    security_opt:
+      - seccomp:unconfined
+      
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /dev:/dev
+      - /home/hrclab/jerry:/home/hrclab/jerry
+    working_dir: /home/hrclab/jerry/tidybot2
+    stdin_open: true
+    tty: true
+    restart: unless-stopped

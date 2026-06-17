@@ -8,7 +8,7 @@ h_x, h_y = 0.190150 * np.array([1.0, 1.0, -1.0, -1.0]), 0.170150 * np.array([-1.
 # h_x, h_y = 0.140150 * np.array([1.0, 1.0, -1.0, -1.0]), 0.120150 * np.array([-1.0, 1.0, 1.0, -1.0])  # ARX5
 
 # Encoder magnet offsets
-ENCODER_MAGNET_OFFSETS = [0.0 / 4096, 0.0 / 4096, 0.0 / 4096, 0.0 / 4096]  # TODO
+ENCODER_MAGNET_OFFSETS = [1915.0 / 4096, -895.0 / 4096, -836.0 / 4096, 1781.0 / 4096]  # TODO
 
 ################################################################################
 # Teleop and imitation learning
@@ -31,3 +31,6 @@ POLICY_CONTROL_FREQ = 10
 POLICY_CONTROL_PERIOD = 1.0 / POLICY_CONTROL_FREQ
 POLICY_IMAGE_WIDTH = 84
 POLICY_IMAGE_HEIGHT = 84
+
+# CAN 總線名稱設定
+CAN_BUS_NAME = "can0"  # 未來如果變成 can1、can2，一輩子只要改這裡就好！

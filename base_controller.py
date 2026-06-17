@@ -31,7 +31,7 @@ import phoenix6
 from phoenix6 import configs, controls, hardware
 from ruckig import InputParameter, OutputParameter, Result, Ruckig, ControlInterface
 from threadpoolctl import threadpool_limits
-from constants import h_x, h_y, ENCODER_MAGNET_OFFSETS
+from constants import h_x, h_y, ENCODER_MAGNET_OFFSETS, CAN_BUS_NAME
 from constants import POLICY_CONTROL_PERIOD
 from utils import create_pid_file
 
@@ -56,17 +56,43 @@ class Motor:
     def __init__(self, num):
         self.num = num
         self.is_steer = num % 2 != 0  # Odd num motors are steer motors
-        self.fx = hardware.TalonFX(self.num)
+        
+        # 1. 強制指定 Phoenix 6 去尋找名為 "can0" 的 CAN 總線設備
+        self.fx = hardware.TalonFX(self.num, CAN_BUS_NAME)
+        
+        # 2. 核心修改：如果是第一顆馬達，進入強力循環監聽，逼出真實電壓
+# 2. 核心修改：如果是第一顆馬達，進入「動態物件重構」監聽，擊碎首發死鎖
+        if self.num == 1:
+            print("====== 正在與第一顆馬達建立實體通訊 (動態重構監聽) ======")
+            
+            # 給它最多 8 次大機會（每次建立新物件，並等待 1 秒）
+            for attempt in range(1, 9):
+                voltage_signal = self.fx.get_supply_voltage()
+                voltage_signal.refresh()
+                v = float(voltage_signal.value)
+                
+                print(f"  -> 嘗試第 {attempt} 次初始化 -> 目前電壓讀值: {v:.2f} V")
+                
+                # 如果拿到真實電壓，大功告成，直接退出！
+                if v > 1.0:
+                    print(f"🎉 🎉 🎉 【重大突破】實體通訊徹底打通！偵測到實體電壓: {v:.2f} V")
+                    if v < 11.5:
+                        raise Exception(f"實體電壓過低 ({v:.2f} V)，請把電池拿去充電！")
+                    break
+                
+                # 【核心破關關鍵】：如果讀到 0.00V，說明這個 fx 物件已經因為 Failed Bring-up 鎖死了
+                # 我們直接強制睡眠 1 秒，等背景 Network Up，然後「銷毀舊物件，重新建立新物件」！
+                time.sleep(1.0)
+                print("  [檢測到驅動鎖死，正在銷毀舊代碼並重構馬達物件...]")
+                del self.fx
+                self.fx = hardware.TalonFX(self.num, CAN_BUS_NAME)
+            else:
+                raise Exception("馬達動態重構逾時！網路已通但馬達無回應，請確認馬達是否亮橘燈。")
+
+        # 3. 繼續原本的初始化流程
         assert self.fx.get_is_pro_licensed()  # Must be Phoenix Pro licensed for FOC
         self.fx.set_position(0)
         fx_cfg = configs.TalonFXConfiguration()
-
-        if self.num == 1:
-            time.sleep(0.2)  # First CAN device, wait for CAN bus to be ready
-            supply_voltage = self.fx.get_supply_voltage().value
-            print(f'Motor supply voltage: {supply_voltage:.2f} V')
-            if supply_voltage < 11.5:
-                raise Exception('Motor supply voltage is too low. Please charge the battery.')
 
         # Status signals
         self.position_signal = self.fx.get_position()
@@ -111,7 +137,8 @@ class Caster:
         self.num = num
         self.steer_motor = Motor(2 * self.num - 1)
         self.drive_motor = Motor(2 * self.num)
-        self.cancoder = hardware.CANcoder(self.num)
+        #self.cancoder = hardware.CANcoder(self.num)
+        self.cancoder = hardware.CANcoder(self.num, CAN_BUS_NAME)
         self.cancoder_cfg = configs.CANcoderConfiguration()
 
         # Status signals
@@ -171,8 +198,32 @@ class Vehicle:
         # Use PID file to enforce single instance
         create_pid_file('tidybot2-base-controller')
 
+        # === 🚀 請在這邊加入以下三行程式碼 🚀 ===
+        print("====== 正在初始化 Phoenix 6 核心背景網路 ======")
+        time.sleep(2.0)  # 強制讓 Phoenix 6 有整整 2 秒的時間去跟外層 can0 建立穩固連接
+        # =============================================
+
         # Initialize casters
-        self.casters = [Caster(num) for num in range(1, NUM_CASTERS + 1)]
+        # Initialize casters
+        # === 修改開始 ===
+        self.casters = []
+        for num in range(1, NUM_CASTERS + 1):
+            caster = Caster(num)
+            
+            # 健康檢查：在建立每個 Caster 後，強制確保馬達通訊是活的
+            # 我們給它最多 10 秒時間等候連線
+            for _ in range(10):
+                caster.steer_motor.fx.get_supply_voltage().refresh()
+                v = caster.steer_motor.fx.get_supply_voltage().value
+                if v > 1.0:
+                    print(f"Caster {num} 馬達已連線，電壓: {v:.2f}V")
+                    break
+                time.sleep(1.0)
+            else:
+                raise Exception(f"Caster {num} 初始化失敗，CAN 總線連線逾時！")
+                
+            self.casters.append(caster)
+        # === 修改結束 ===
 
         # CAN bus update frequency
         self.status_signals = [signal for caster in self.casters for signal in caster.status_signals]
@@ -417,7 +468,7 @@ class Vehicle:
 
 if __name__ == '__main__':
     vehicle = Vehicle(max_vel=(0.25, 0.25, 0.79))
-    # vehicle.get_encoder_offsets(); exit()
+    #vehicle.get_encoder_offsets(); exit()
     vehicle.start_control()
     try:
         for _ in range(50):
