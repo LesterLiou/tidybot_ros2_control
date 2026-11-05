@@ -69,6 +69,16 @@ In another terminal, verify the CAN interface:
 ip -details link show can0
 ```
 
+For the Docker CANivore workflow, initialize CTRE's fixed CAN FD timing first:
+
+```bash
+docker compose run --rm can-init
+docker compose run --rm tidybot tidybot-hardware-check
+```
+
+Do not use plain `ip link set can0 up` for CANivore; use `can-init`. Generic
+SocketCAN adapters still follow their own host-side bitrate instructions.
+
 ### Linux sees js0, but joy_node cannot see the controller
 
 `joy_node` uses SDL and needs access to the controller's `/dev/input/eventN`.

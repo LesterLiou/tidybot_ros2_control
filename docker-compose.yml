@@ -1,6 +1,41 @@
 name: tidybot-ros2-control
 
 services:
+  # Phoenix uses CTRE's matching host utilities to apply the CANivore's fixed
+  # CAN FD timings. This short-lived service is the only one with NET_ADMIN;
+  # the long-running robot controller cannot administer the host network.
+  can-init:
+    image: tidybot_ros2_control:jazzy-noble
+    network_mode: host
+    privileged: false
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    pids_limit: 64
+    environment:
+      TIDYBOT_CAN_INTERFACE: ${TIDYBOT_CAN_INTERFACE:-can0}
+      PYTHONUNBUFFERED: "1"
+      HOME: /tmp
+    volumes:
+      - type: bind
+        source: /usr/bin/canivore_setup
+        target: /usr/bin/canivore_setup
+        read_only: true
+      - type: bind
+        source: /usr/bin/canivore_shutdown
+        target: /usr/bin/canivore_shutdown
+        read_only: true
+    tmpfs:
+      - /tmp:exec,mode=1777
+      - /run:mode=755
+    command: ["tidybot-can-init"]
+    restart: "no"
+
   tidybot:
     build:
       context: .
@@ -9,7 +44,7 @@ services:
     container_name: tidybot_ros2_control
 
     # SocketCAN interfaces live in a network namespace. Host networking makes
-    # the host-configured can0 visible and also supports ROS 2 DDS discovery.
+    # the can-init-initialized can0 visible and supports ROS 2 DDS discovery.
     network_mode: host
 
     # The container can transmit CAN frames and request the existing 250 Hz

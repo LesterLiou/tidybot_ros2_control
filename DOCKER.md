@@ -11,20 +11,29 @@ pinned binding is verified during every image build.
 
 ## What stays on the host
 
-Docker shares the host kernel. Install and configure the CAN adapter's kernel
-driver on the host, then bring up `can0` before starting the container. A
-CANivore requires CTRE's `canivore-usb` host kernel module. The image does not
-load modules or change host network configuration.
+Docker shares the host kernel. Install the CAN adapter's kernel driver on the
+host. A CANivore requires CTRE's `canivore-usb` kernel module and its matching
+`/usr/bin/canivore_setup` and `/usr/bin/canivore_shutdown` tools. The image does
+not load kernel modules.
 
-Verify the host interface:
+Verify that the host driver created the interface:
 
 ```bash
 ip -details link show can0
 ```
 
-For a generic CAN adapter that requires a bitrate, configure it on the host
-according to the adapter's documentation. Do not apply a generic bitrate command
-to CANivore: its firmware manages the bus settings.
+Do not run plain `ip link set can0 up` for a CANivore: the kernel will reject it
+until CTRE's fixed CAN FD timing has been applied. After building the image, use
+the short-lived `can-init` service instead:
+
+```bash
+docker compose run --rm can-init
+```
+
+Phoenix calls the host's matching CTRE helper from this service. Only this
+short-lived service receives `NET_ADMIN`; the robot-control service does not.
+For a generic CAN adapter, configure its bitrate on the host according to that
+adapter's documentation and do not use `can-init`.
 
 Plug in the gamepad and USB devices before Compose starts so `/dev/input` and
 `/dev/bus/usb` exist. The existing host udev rule remains responsible for
@@ -37,11 +46,13 @@ From this repository:
 ```bash
 mkdir -p rosbags
 docker compose build
+docker compose run --rm can-init
 docker compose run --rm tidybot tidybot-hardware-check
 ```
 
-The hardware check imports ROS/Phoenix/Ruckig, shows the CAN interface and USB
-devices, and sends no motor command.
+The initializer creates a Phoenix `CANBus` status object, not a motor object or
+enable request. The hardware check imports ROS/Phoenix/Ruckig and shows the CAN
+interface and USB devices. Neither command sends a motor control request.
 
 The image build runs all synthetic tests. To repeat them:
 
@@ -98,11 +109,16 @@ The service does not use `privileged`, host PID/IPC namespaces, an unconfined
 seccomp profile, or a full `/dev` mount. Its root filesystem is read-only, and it
 has only `NET_RAW` (SocketCAN) and `SYS_NICE` (the 250 Hz real-time thread).
 
-Physical control necessarily grants the container access to CAN transmission,
-USB hardware, gamepad input, and the mounted `rosbags/` directory. ROS target
-calibration persists in the named `tidybot_ros_home` volume. Recorded bags stay
-under the ignored host `rosbags/` directory and are not included in the image or
-Git commits.
+Physical control necessarily grants the robot container access to CAN
+transmission, USB hardware, gamepad input, and the mounted `rosbags/` directory.
+It cannot administer the host network. The separate `can-init` service receives
+`NET_ADMIN` only while applying the CANivore's CTRE-defined timing, then exits.
+ROS target calibration persists in the named `tidybot_ros_home` volume.
+Recorded bags stay under the ignored host `rosbags/` directory and are not
+included in the image or Git commits.
+
+Run `can-init` again after unplugging/reconnecting the CANivore or rebooting the
+host.
 
 If the bus name differs, set it for both Compose and the controller:
 

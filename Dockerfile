@@ -59,7 +59,11 @@ RUN source /opt/ros/jazzy/setup.bash \
 
 COPY scripts/docker-entrypoint.sh /usr/local/bin/tidybot-entrypoint
 COPY scripts/docker-hardware-check.sh /usr/local/bin/tidybot-hardware-check
-RUN chmod 0755 /usr/local/bin/tidybot-entrypoint /usr/local/bin/tidybot-hardware-check \
+COPY scripts/docker-can-init.py /usr/local/bin/tidybot-can-init
+RUN chmod 0755 \
+        /usr/local/bin/tidybot-entrypoint \
+        /usr/local/bin/tidybot-hardware-check \
+        /usr/local/bin/tidybot-can-init \
     && mkdir -p /home/tidybot/.ros /home/tidybot/jerry/tidybot_ros2_control/rosbags
 
 ENV HOME=/home/tidybot
