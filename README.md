@@ -1,5 +1,9 @@
 # tidybot2
 
+> ROS 2 base and Xbox-compatible gamepad setup: see
+> [ROS2_CONTROL.md](ROS2_CONTROL.md).
+> D415 / ArUco visual docking: see [DOCKING.md](DOCKING.md).
+
 This code release accompanies the following project:
 
 ### TidyBot++: An Open-Source Holonomic Mobile Manipulator for Robot Learning

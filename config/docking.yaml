@@ -1,0 +1,119 @@
+# Measure the rigid mounting before setting camera_mount_calibrated to true.
+# Distances: metres; angles: radians. Camera XYZ is the camera_link origin in base_link.
+tidybot_aruco_detector:
+  ros__parameters:
+    image_topic: /camera/camera/color/image_raw
+    camera_info_topic: /camera/camera/color/camera_info
+    base_frame: base_link
+    camera_frame: camera_link
+    optical_frame: camera_color_optical_frame
+    # Forward 22.5 cm, centred, 40 cm above ground (base_link Z=0 at ground).
+    camera_xyz: [0.225, 0.0, 0.40]
+    # Mounting confirmed: camera is level and faces straight forward.
+    camera_rpy: [0.0, 0.0, 0.0]
+    camera_mount_calibrated: true
+    # Set false if a robot URDF already publishes base_link -> camera_link.
+    publish_camera_tf: true
+    dictionary: DICT_4X4_50
+    marker_id: 0
+    # OUTER BLACK SQUARE side length, excluding the surrounding white margin.
+    marker_size: 0.12
+    image_timeout: 0.25
+    max_marker_distance: 3.0
+    min_edge_pixels: 25.0
+    max_reprojection_error: 2.0
+    publish_debug_image: true
+    # JPEG stream used by gamepad-triggered rosbag recording. The regular
+    # full-rate debug image remains available for the live image viewer.
+    debug_compressed_rate: 10.0
+    debug_jpeg_quality: 85
+
+tidybot_docking_controller:
+  ros__parameters:
+    base_frame: base_link
+    # Reused on every launch, including after moving the dock and marker together.
+    target_file: ~/.ros/tidybot/dock_target.yaml
+    control_rate: 30.0
+    teach_duration: 1.0
+    teach_min_samples: 15
+    teach_translation_spread: 0.005
+    teach_rotation_spread: 0.035
+    # Stop motion after 0.15 s without a pose, allow brief reacquisition, and
+    # fail/release control only when the loss lasts longer than 0.75 s.
+    pose_command_timeout: 0.15
+    pose_timeout: 0.75
+    # A 1.5 m allowed start cannot finish within the previous 45 s limit at
+    # 0.03 m/s. The 8 s no-progress watchdog still stops an immobile robot.
+    approach_timeout: 120.0
+    # Allow slow corrections; only meaningful improvement refreshes this timer.
+    progress_timeout: 8.0
+    # Per-axis improvement: 4 mm in X/Y, or 0.016 rad (~0.92 deg) in yaw.
+    progress_distance: 0.004
+    settle_time: 0.6
+    # Fixed mechanical correction. Positive means the robot's own right side
+    # while it faces the dock (not the observer's right when facing the robot).
+    target_right_offset: 0.006
+    # After the taught pose is stable, keep lateral/yaw locked and use ArUco
+    # feedback to push another 5 mm. Abort if it cannot finish within 2 s.
+    extra_insert_distance: 0.005
+    extra_insert_speed: 0.025
+    extra_insert_tolerance: 0.001
+    extra_insert_timeout: 2.0
+    # Initial test tolerances, not a claim of mechanical docking accuracy.
+    tolerance_x: 0.010
+    tolerance_y: 0.005
+    tolerance_yaw: 0.025
+    # Over 10 cm away, approach and correct together. Under 10 cm, require
+    # fine alignment; under 5 cm, align once more before straight insertion.
+    align_y: 0.015
+    align_yaw: 0.05
+    fine_align_distance: 0.10
+    insertion_distance: 0.05
+    # Only very large coarse errors stop forward motion at long range.
+    far_stop_y: 0.08
+    far_stop_yaw: 0.20
+    insertion_y: 0.005
+    insertion_yaw: 0.025
+    # Once straight insertion begins, stop instead of steering if alignment
+    # drifts this far. The robot must be reversed manually after such a stop.
+    insertion_abort_y: 0.025
+    insertion_abort_yaw: 0.10
+    max_start_distance: 1.5
+    max_start_yaw: 0.7
+    max_pose_jump: 0.12
+    max_rotation_jump: 0.3
+    # Preserve the 4 cm check near the fixture. At long range, linearly relax
+    # only the ArUco height estimate up to 8 cm because perspective noise grows.
+    max_vertical_error: 0.04
+    far_max_vertical_error: 0.08
+    max_tilt_error: 0.15
+    max_forward: 0.04
+    # Repeated runs slowed or stopped once forward commands fell to
+    # 0.020-0.021 m/s. Keep close-range motion at or above 0.025 m/s.
+    near_max_forward: 0.028
+    insertion_max_forward: 0.025
+    min_forward: 0.025
+    # 0.015 m/s also did not move the real base laterally. Use a minimum
+    # effective correction while an axis remains outside tolerance.
+    max_lateral: 0.04
+    min_lateral: 0.025
+    # Pure rotation stalled around 0.08 rad/s on the real powered casters.
+    # Use a stronger floor only during FAR_HEADING; fine corrections stay proportional.
+    max_yaw_rate: 0.12
+    min_heading_yaw_rate: 0.10
+    gain_x: 0.4
+    gain_y: 1.0
+    gain_yaw: 0.6
+
+tidybot_control_mux:
+  ros__parameters:
+    publish_rate: 50.0
+    command_timeout: 0.25
+    joy_timeout: 0.30
+    # First-stage testing: loss of the gamepad stops and latches control off.
+    require_gamepad: true
+    button_arm: 4
+    button_disarm: 10
+    deadman_buttons: [6, 7]
+    manual_max_velocity: [1.0, 1.0, 1.57]
+    docking_max_velocity: [0.04, 0.04, 0.12]

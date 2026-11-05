@@ -1,0 +1,4 @@
+# Xbox Wireless Controller (Bluetooth, 045e:0b13).
+# SDL/joy_node reads the event device. Grant the existing plugdev group access
+# only to this joystick model; do not change keyboard or mouse permissions.
+SUBSYSTEM=="input", KERNEL=="event[0-9]*", ENV{ID_INPUT_JOYSTICK}=="1", ATTRS{id/vendor}=="045e", ATTRS{id/product}=="0b13", GROUP="plugdev", MODE="0660"

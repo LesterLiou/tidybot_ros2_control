@@ -4,11 +4,11 @@ import numpy as np
 # Mobile base
 
 # Vehicle center to steer axis (m)
-h_x, h_y = 0.190150 * np.array([1.0, 1.0, -1.0, -1.0]), 0.170150 * np.array([-1.0, 1.0, 1.0, -1.0])  # Kinova / Franka
-# h_x, h_y = 0.140150 * np.array([1.0, 1.0, -1.0, -1.0]), 0.120150 * np.array([-1.0, 1.0, 1.0, -1.0])  # ARX5
+#h_x, h_y = 0.190150 * np.array([1.0, 1.0, -1.0, -1.0]), 0.170150 * np.array([-1.0, 1.0, 1.0, -1.0])  # Kinova / Franka
+h_x, h_y = 0.140150 * np.array([1.0, 1.0, -1.0, -1.0]), 0.120150 * np.array([-1.0, 1.0, 1.0, -1.0])  # ARX5
 
 # Encoder magnet offsets
-ENCODER_MAGNET_OFFSETS = [1915.0 / 4096, -895.0 / 4096, -836.0 / 4096, 1781.0 / 4096]  # TODO
+ENCODER_MAGNET_OFFSETS = [2735.0 / 4096, -1332.0 / 4096, -2013.0 / 4096, 3385.0 / 4096]  # TODO
 
 ################################################################################
 # Teleop and imitation learning

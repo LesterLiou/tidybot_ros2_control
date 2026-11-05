@@ -331,9 +331,15 @@ class Vehicle:
         self.control_loop_thread.start()
 
     def stop_control(self):
+        if self.control_loop_thread is None:
+            return
         self.control_loop_running = False
         self.control_loop_thread.join()
         self.control_loop_thread = None
+        # Explicitly neutral every motor on shutdown instead of relying only on
+        # the Phoenix enable watchdog to expire.
+        for caster in self.casters:
+            caster.set_neutral()
 
     def control_loop(self):
         # Set real-time scheduling policy
@@ -442,13 +448,17 @@ class Vehicle:
             # self.redis_client.set(f'dx', f'{self.dx[0]} {self.dx[1]} {self.dx[2]}')
 
     def _enqueue_command(self, command_type, target, frame=None):
+        command = {'type': command_type, 'target': target}
+        if frame is not None:
+            command['frame'] = FrameType(frame)
+        # This is a target-state queue: the newest command, especially a stop,
+        # must replace a stale command that the real-time loop has not consumed.
         if self.command_queue.full():
-            print('Warning: Command queue is full. Is control loop running?')
-        else:
-            command = {'type': command_type, 'target': target}
-            if frame is not None:
-                command['frame'] = FrameType(frame)
-            self.command_queue.put(command, block=False)
+            try:
+                self.command_queue.get_nowait()
+            except queue.Empty:
+                pass
+        self.command_queue.put_nowait(command)
 
     def set_target_velocity(self, velocity, frame='global'):
         self._enqueue_command(CommandType.VELOCITY, velocity, frame)

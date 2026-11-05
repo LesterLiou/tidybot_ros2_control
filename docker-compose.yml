@@ -17,6 +17,8 @@ services:
     environment:
       - DISPLAY=${DISPLAY}
       - QT_X11_NO_MITSHM=1
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - PYTHONUNBUFFERED=1
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /dev:/dev

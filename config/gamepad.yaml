@@ -1,0 +1,71 @@
+joy_node:
+  ros__parameters:
+    device_id: 0
+    # Deadzone is applied once in tidybot_gamepad_teleop below.
+    deadzone: 0.0
+    autorepeat_rate: 50.0
+    sticky_buttons: false
+
+tidybot_gamepad_teleop:
+  ros__parameters:
+    # Measured raw mapping for this Xbox Series X controller through joy_node.
+    axis_linear_x: 1
+    axis_linear_y: 0
+    # Right-stick horizontal: left=+1.0, right=-1.0.
+    axis_angular_z: 2
+    # joy_node follows ROS directions: forward and left are positive.
+    invert_linear_x: false
+    invert_linear_y: false
+    # Right is -1.0 (clockwise); left is +1.0 (counter-clockwise).
+    invert_angular_z: false
+    button_local_deadman: 6
+    button_global_deadman: 7
+    require_both_deadman: true
+    control_frame: local
+    button_disarm: 10
+    button_arm: 4
+    button_speed_up: 3
+    button_speed_down: 1
+    # A starts visual docking when tidybot_docking.launch.py is running.
+    button_dock: 0
+    docking_start_service: /docking/start
+    # Xbox Menu (three horizontal lines): press once to record, again to save.
+    button_rosbag: 11
+    # Xbox/Guide logo: safely stop the robot and close the entire launch.
+    button_shutdown: 12
+    rosbag_recording_enabled: true
+    rosbag_output_directory: ~/jerry/tidybot_ros2_control/rosbags
+    rosbag_min_free_space_gb: 2.0
+    rosbag_topics:
+      - /docking/debug_image/compressed
+      - /docking/status
+      - /docking/marker_pose
+      - /docking/cmd_vel
+      - /tidybot/control_status
+      - /cmd_vel
+      - /odom
+      - /joy
+      - /tf
+      - /tf_static
+    deadzone: 0.05
+    # Filters the measured +/-0.15 horizontal crosstalk during vertical motion.
+    angular_deadzone: 0.20
+    # Starts at the previous conservative limit (50% of these maxima).
+    max_velocity: [1.0, 1.0, 1.57]
+    initial_speed_scale: 0.50
+    speed_scale_step: 0.10
+    min_speed_scale: 0.20
+    max_speed_scale: 1.00
+    publish_rate: 50.0
+    joy_timeout: 0.25
+
+tidybot_base_node:
+  ros__parameters:
+    require_enable: true
+    command_timeout: 0.30
+    max_velocity: [1.0, 1.0, 1.57]
+    max_acceleration: [0.25, 0.25, 0.79]
+    publish_odom: true
+    odom_publish_rate: 30.0
+    odom_frame: odom
+    base_frame: base_link
