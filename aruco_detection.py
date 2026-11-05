@@ -22,10 +22,15 @@ class ArucoPoseEstimator:
         self.min_edge = min_edge_pixels
         params = (cv2.aruco.DetectorParameters() if hasattr(cv2.aruco, 'DetectorParameters')
                   else cv2.aruco.DetectorParameters_create())
-        params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
         self.params = params
         self.detector = (cv2.aruco.ArucoDetector(self.dictionary, params)
                          if hasattr(cv2.aruco, 'ArucoDetector') else None)
+        # Refine explicitly after detection. This gives identical behavior on
+        # Humble/OpenCV 4.5 and Jazzy/OpenCV 4.6, whose Python 3.12 binding can
+        # crash while assigning DetectorParameters.cornerRefinementMethod.
+        self.refinement_criteria = (
+            cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_MAX_ITER, 30, 0.01
+        )
         h = marker_size / 2
         self.object_points = np.array([[-h, h, 0], [h, h, 0], [h, -h, 0], [-h, -h, 0]],
                                       dtype=np.float64)
@@ -38,7 +43,13 @@ class ArucoPoseEstimator:
         matches = np.flatnonzero(ids.reshape(-1) == self.marker_id)
         if len(matches) != 1:
             return None  # Duplicate IDs are ambiguous.
-        points = corners[int(matches[0])].reshape(4, 2).astype(np.float64)
+        points = corners[int(matches[0])].reshape(4, 2).astype(np.float32)
+        gray = (cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                if image.ndim == 3 else image)
+        cv2.cornerSubPix(
+            gray, points.reshape(-1, 1, 2), (5, 5), (-1, -1), self.refinement_criteria
+        )
+        points = points.astype(np.float64)
         height, width = image.shape[:2]
         if (np.min(np.linalg.norm(points - np.roll(points, -1, axis=0), axis=1)) < self.min_edge
                 or np.any(points < 4) or np.any(points[:, 0] >= width-4)
@@ -57,4 +68,4 @@ class ArucoPoseEstimator:
         result[:3, 3] = tvec.reshape(3)
         if np.dot(result[:3, 2], result[:3, 3]) >= 0:
             return None  # The printed front of the marker must face the camera.
-        return result, corners[int(matches[0])], error
+        return result, points.reshape(1, 4, 2).astype(np.float32), error

@@ -12,8 +12,10 @@ This package uses the normal ROS 2 control flow:
                                                            +-> /odom
 ```
 
-The examples below target ROS 2 Humble. Keep the robot's casters off the ground
-for the first test and keep a physical emergency stop within reach.
+The native-install examples below target ROS 2 Humble. The verified Ubuntu 24.04
+/ ROS 2 Jazzy container workflow is documented in [DOCKER.md](DOCKER.md). Keep
+the robot's casters off the ground for the first test and keep a physical
+emergency stop within reach.
 
 ## Install and build
 
@@ -47,8 +49,9 @@ source install/setup.bash
 ```
 
 The process also needs access to `/dev/input` and the configured SocketCAN
-interface (`can0` by default). The supplied compose file already exposes `/dev`
-and uses the host network.
+interface (`can0` by default). The supplied Compose service uses the host network
+for SocketCAN and grants only the USB/input device classes instead of mounting
+all of `/dev`.
 
 ## Verify before enabling motors
 

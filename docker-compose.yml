@@ -1,29 +1,78 @@
-version: '3.8'
+name: tidybot-ros2-control
 
 services:
-  tidybot_env:
-    image: tidybot_perfect_env:latest
-    container_name: tidybot_humble_container
-    # 網路與 IPC 共享：直接共用外層 24.04 的網路協議棧與記憶體通道，這對 Phoenix 與馬達握手至關重要
-    network_mode: "host"
-    pid: "host"
-    ipc: "host"
-    privileged: true
-    
-    # 全功能解鎖：防止 Linux 核心安全機制（seccomp）攔截容器內 Phoenix 的底層 Socket 呼叫
+  tidybot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tidybot_ros2_control:jazzy-noble
+    container_name: tidybot_ros2_control
+
+    # SocketCAN interfaces live in a network namespace. Host networking makes
+    # the host-configured can0 visible and also supports ROS 2 DDS discovery.
+    network_mode: host
+
+    # The container can transmit CAN frames and request the existing 250 Hz
+    # control thread's real-time scheduling. It cannot load kernel modules,
+    # mount filesystems, inspect host PIDs, or administer the host network.
+    privileged: false
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_RAW
+      - SYS_NICE
     security_opt:
-      - seccomp:unconfined
-      
+      - no-new-privileges:true
+    read_only: true
+    pids_limit: 512
+    ulimits:
+      rtprio: 99
+      memlock: -1
+
     environment:
-      - DISPLAY=${DISPLAY}
-      - QT_X11_NO_MITSHM=1
-      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
-      - PYTHONUNBUFFERED=1
+      DISPLAY: ${DISPLAY:-}
+      QT_X11_NO_MITSHM: "1"
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY:-0}
+      TIDYBOT_CAN_INTERFACE: ${TIDYBOT_CAN_INTERFACE:-can0}
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+
+    # USB access is needed by the D415 and USB CAN adapters. /dev/input is
+    # needed by joy_node. Device cgroup rules retain hot-plug support without
+    # exposing every host device as the old privileged /dev mount did.
     volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - /dev:/dev
-      - /home/hrclab/jerry:/home/hrclab/jerry
-    working_dir: /home/hrclab/jerry/tidybot2
+      - type: bind
+        source: /dev/bus/usb
+        target: /dev/bus/usb
+      - type: bind
+        source: /dev/input
+        target: /dev/input
+      - type: bind
+        source: /tmp/.X11-unix
+        target: /tmp/.X11-unix
+        read_only: true
+      - type: bind
+        source: ./rosbags
+        target: /home/tidybot/jerry/tidybot_ros2_control/rosbags
+      - type: volume
+        source: tidybot_ros_home
+        target: /home/tidybot/.ros
+    device_cgroup_rules:
+      - "c 13:* rwm"   # Linux input/event and joystick devices
+      - "c 81:* rwm"   # Video4Linux devices
+      - "c 189:* rwm"  # USB devices
+    tmpfs:
+      - /tmp:exec,mode=1777
+      - /run:mode=755
+
+    init: true
+    stop_signal: SIGINT
+    stop_grace_period: 20s
+    working_dir: /opt/tidybot_ws
     stdin_open: true
     tty: true
-    restart: unless-stopped
+    restart: "no"
+
+volumes:
+  tidybot_ros_home:

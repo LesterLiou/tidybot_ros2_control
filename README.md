@@ -3,6 +3,7 @@
 > ROS 2 base and Xbox-compatible gamepad setup: see
 > [ROS2_CONTROL.md](ROS2_CONTROL.md).
 > D415 / ArUco visual docking: see [DOCKING.md](DOCKING.md).
+> Ubuntu 24.04 / ROS 2 Jazzy Docker environment: see [DOCKER.md](DOCKER.md).
 
 This code release accompanies the following project:
 

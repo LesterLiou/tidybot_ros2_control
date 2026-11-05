@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 
 ################################################################################
@@ -32,5 +34,6 @@ POLICY_CONTROL_PERIOD = 1.0 / POLICY_CONTROL_FREQ
 POLICY_IMAGE_WIDTH = 84
 POLICY_IMAGE_HEIGHT = 84
 
-# CAN 總線名稱設定
-CAN_BUS_NAME = "can0"  # 未來如果變成 can1、can2，一輩子只要改這裡就好！
+# SocketCAN bus name. Docker/host deployments can select can1 without editing
+# source by setting TIDYBOT_CAN_INTERFACE before the process starts.
+CAN_BUS_NAME = os.environ.get('TIDYBOT_CAN_INTERFACE', 'can0')
