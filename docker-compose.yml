@@ -74,9 +74,14 @@ services:
       PYTHONDONTWRITEBYTECODE: "1"
 
     # USB access is needed by the D415 and USB CAN adapters. /dev/input is
-    # needed by joy_node. Device cgroup rules retain hot-plug support without
-    # exposing every host device as the old privileged /dev mount did.
+    # needed by joy_node. Host /dev is visible read-only under /host-dev so the
+    # entrypoint can follow V4L2 renumbering, while cgroups allow access only to
+    # input, V4L2, USB, and media-controller device classes.
     volumes:
+      - type: bind
+        source: /dev
+        target: /host-dev
+        read_only: true
       - type: bind
         source: /dev/bus/usb
         target: /dev/bus/usb
@@ -97,6 +102,7 @@ services:
       - "c 13:* rwm"   # Linux input/event and joystick devices
       - "c 81:* rwm"   # Video4Linux devices
       - "c 189:* rwm"  # USB devices
+      - "c 239:* rwm"  # Media-controller devices on this NUC
     tmpfs:
       - /tmp:exec,mode=1777
       - /run:mode=755

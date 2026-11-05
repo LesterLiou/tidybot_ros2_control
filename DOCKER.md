@@ -35,9 +35,13 @@ short-lived service receives `NET_ADMIN`; the robot-control service does not.
 For a generic CAN adapter, configure its bitrate on the host according to that
 adapter's documentation and do not use `can-init`.
 
-Plug in the gamepad and USB devices before Compose starts so `/dev/input` and
-`/dev/bus/usb` exist. The existing host udev rule remains responsible for
-gamepad permissions and hot-plug behavior.
+Plug in the gamepad and D415 before Compose starts so `/dev/input` and
+`/dev/bus/usb` exist. The host device tree is mounted read-only at `/host-dev`;
+the entrypoint provides V4L2/media symlinks that survive D415 renumbering after
+a hardware reset. Device cgroups still permit opening only the input, V4L2,
+USB, and media-controller classes rather than granting unrestricted device
+access. The existing host udev rule remains responsible for gamepad permissions
+and hot-plug behavior.
 
 ## Build and inspect
 
