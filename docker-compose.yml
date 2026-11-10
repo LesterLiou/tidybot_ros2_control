@@ -115,5 +115,50 @@ services:
     tty: true
     restart: "no"
 
+  # Independent low-priority service for reading the Emirai phone display.
+  # It has camera access but no CAN, gamepad, NET_RAW, or real-time privilege.
+  battery-monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tidybot_ros2_control:jazzy-noble
+    container_name: tidybot_battery_monitor
+    network_mode: host
+    privileged: false
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    pids_limit: 256
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-0}
+      ROS_LOCALHOST_ONLY: ${ROS_LOCALHOST_ONLY:-0}
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - type: bind
+        source: /dev
+        target: /host-dev
+        read_only: true
+      - type: bind
+        source: /dev/bus/usb
+        target: /dev/bus/usb
+      - type: volume
+        source: tidybot_ros_home
+        target: /home/tidybot/.ros
+    device_cgroup_rules:
+      - "c 81:* rwm"   # Video4Linux devices
+      - "c 189:* rwm"  # USB devices
+      - "c 239:* rwm"  # Media-controller devices on this NUC
+    tmpfs:
+      - /tmp:exec,mode=1777
+      - /run:mode=755
+    init: true
+    stop_signal: SIGINT
+    stop_grace_period: 10s
+    command: ["ros2", "launch", "tidybot_ros2_control", "tidybot_battery_monitor.launch.py"]
+    restart: unless-stopped
+
 volumes:
   tidybot_ros_home:

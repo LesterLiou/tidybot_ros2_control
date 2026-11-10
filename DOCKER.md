@@ -3,6 +3,8 @@
 This image runs the `tidybot_ros2_control` package on Ubuntu 24.04 (Noble) with
 ROS 2 Jazzy. It contains Phoenix 6, Ruckig, SocketCAN tools, the ROS gamepad
 driver, rosbag2, OpenCV/ArUco, and the RealSense ROS driver.
+It also includes Tesseract and an isolated UVC-camera battery dashboard; see
+[BATTERY_MONITOR.md](BATTERY_MONITOR.md).
 
 The Jazzy image uses the official ROS `cv_bridge` package and pins the Python
 ArUco binding to `opencv-contrib-python-headless` 4.10. Ubuntu Noble's OpenCV
@@ -120,6 +122,11 @@ It cannot administer the host network. The separate `can-init` service receives
 ROS target calibration persists in the named `tidybot_ros_home` volume.
 Recorded bags stay under the ignored host `rosbags/` directory and are not
 included in the image or Git commits.
+
+The optional `battery-monitor` service has no CAN or gamepad access and no
+Linux capabilities. Its SQLite history persists in `tidybot_ros_home`; camera
+frames are not recorded. Start it independently with
+`docker compose up -d battery-monitor`.
 
 Run `can-init` again after unplugging/reconnecting the CANivore or rebooting the
 host.

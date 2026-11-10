@@ -35,7 +35,10 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
         ros-jazzy-std-msgs \
         ros-jazzy-std-srvs \
         ros-jazzy-tf2-ros \
+        tesseract-ocr \
+        tesseract-ocr-eng \
         usbutils \
+        v4l-utils \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/tidybot_ws/src/tidybot_ros2_control
@@ -55,6 +58,7 @@ RUN source /opt/ros/jazzy/setup.bash \
     && colcon build --symlink-install --packages-select tidybot_ros2_control \
     && source install/setup.bash \
     && python3 -c "import cv2, numpy, phoenix6, rclpy, ruckig; assert hasattr(cv2, 'aruco')" \
+    && tesseract --version \
     && python3 -m pytest -q src/tidybot_ros2_control/tests
 
 COPY scripts/docker-entrypoint.sh /usr/local/bin/tidybot-entrypoint

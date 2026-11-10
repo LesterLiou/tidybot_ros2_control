@@ -1,0 +1,14 @@
+tidybot_battery_monitor:
+  ros__parameters:
+    # "auto" selects the first working UVC camera that is not a RealSense.
+    # A stable /dev/v4l/by-id/... path can be supplied after the camera is known.
+    camera: auto
+    camera_width: 1280
+    camera_height: 720
+    sample_interval: 60.0
+    minimum_confidence: 35.0
+    low_battery_threshold: 20
+    web_bind: 0.0.0.0
+    web_port: 8080
+    # Empty means ~/.ros/tidybot/battery_monitor in the persistent Docker volume.
+    data_dir: ""

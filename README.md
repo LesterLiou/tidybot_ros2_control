@@ -4,6 +4,8 @@
 > [ROS2_CONTROL.md](ROS2_CONTROL.md).
 > D415 / ArUco visual docking: see [DOCKING.md](DOCKING.md).
 > Ubuntu 24.04 / ROS 2 Jazzy Docker environment: see [DOCKER.md](DOCKER.md).
+> USB camera / Emirai phone battery OCR dashboard: see
+> [BATTERY_MONITOR.md](BATTERY_MONITOR.md).
 
 This code release accompanies the following project:
 

@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TidyBot 電量監控</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1016;
+      --panel: #121a23;
+      --panel-2: #18222e;
+      --line: #273646;
+      --text: #edf5fb;
+      --muted: #8fa4b6;
+      --green: #4ad295;
+      --yellow: #f6c85f;
+      --red: #ff6f70;
+      --blue: #61aef7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at 15% 0%, #17293a 0, transparent 32rem), var(--bg);
+      color: var(--text);
+      font: 15px/1.5 system-ui, -apple-system, "Noto Sans TC", sans-serif;
+    }
+    header, main { width: min(1180px, calc(100% - 32px)); margin: 0 auto; }
+    header { display: flex; align-items: center; justify-content: space-between; padding: 28px 0 20px; }
+    h1 { margin: 0; font-size: clamp(22px, 3vw, 32px); letter-spacing: .02em; }
+    h2 { margin: 0 0 16px; font-size: 17px; }
+    .subtitle, .muted { color: var(--muted); }
+    .status-pill { padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; background: #111a23; }
+    .status-pill.ok { color: var(--green); border-color: #236344; }
+    .status-pill.warn { color: var(--yellow); border-color: #705b27; }
+    .status-pill.bad { color: var(--red); border-color: #753738; }
+    main { display: grid; gap: 16px; padding-bottom: 40px; }
+    .top-grid { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 16px; }
+    .panel { background: color-mix(in srgb, var(--panel) 94%, transparent); border: 1px solid var(--line); border-radius: 16px; padding: 18px; box-shadow: 0 14px 34px #0005; }
+    .battery-card { display: flex; min-height: 274px; flex-direction: column; justify-content: space-between; }
+    .battery-value { font-size: clamp(64px, 10vw, 100px); font-weight: 750; line-height: 1; letter-spacing: -.06em; }
+    .battery-value span { color: var(--muted); font-size: .38em; margin-left: 7px; letter-spacing: 0; }
+    .progress { height: 12px; overflow: hidden; border-radius: 8px; background: #27323e; }
+    .progress > div { height: 100%; width: 0; border-radius: inherit; background: var(--green); transition: width .4s ease; }
+    .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+    .meta { padding: 10px 12px; border-radius: 10px; background: var(--panel-2); }
+    .meta .label { color: var(--muted); font-size: 12px; }
+    .meta .value { margin-top: 2px; overflow-wrap: anywhere; }
+    .chart-wrap { height: 225px; position: relative; }
+    #historyChart { width: 100%; height: 100%; }
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+    select, input, button, .button {
+      color: var(--text); background: #192532; border: 1px solid #344759; border-radius: 9px;
+      padding: 8px 11px; font: inherit;
+    }
+    button, .button { cursor: pointer; text-decoration: none; }
+    button:hover, .button:hover { border-color: var(--blue); }
+    button.primary { color: #07141f; background: var(--blue); border-color: var(--blue); font-weight: 650; }
+    button:disabled { opacity: .45; cursor: default; }
+    .camera-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr); gap: 16px; }
+    .camera-stage { position: relative; overflow: hidden; min-height: 220px; display: grid; place-items: center; background: #05080c; border: 1px solid var(--line); border-radius: 12px; user-select: none; }
+    .camera-stage.ready { min-height: 0; }
+    #cameraImage { display: block; width: 100%; height: auto; max-height: 620px; object-fit: contain; }
+    #roiCanvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+    #cameraPlaceholder { position: absolute; color: var(--muted); text-align: center; padding: 20px; }
+    .side-stack { display: grid; gap: 12px; align-content: start; }
+    .roi-preview { width: 100%; min-height: 95px; max-height: 180px; object-fit: contain; background: #05080c; border: 1px solid var(--line); border-radius: 10px; }
+    .form-row { display: grid; grid-template-columns: 1fr 110px; align-items: center; gap: 10px; }
+    .form-row input { width: 100%; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .notice { padding: 10px 12px; background: #202631; border-left: 3px solid var(--yellow); border-radius: 7px; color: #dce6ed; }
+    .error { color: var(--red); min-height: 22px; }
+    code { color: #b8dcff; }
+    @media (max-width: 820px) {
+      .top-grid, .camera-grid { grid-template-columns: 1fr; }
+      header { align-items: flex-start; gap: 12px; }
+      .battery-card { min-height: 230px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>TidyBot 電量監控</h1>
+      <div class="subtitle">JinPei USB 相機 · 手機畫面 OCR</div>
+    </div>
+    <div id="statusPill" class="status-pill warn">正在連線…</div>
+  </header>
+
+  <main>
+    <section class="top-grid">
+      <div class="panel battery-card">
+        <div>
+          <div class="muted">目前電量</div>
+          <div id="batteryValue" class="battery-value">--<span>%</span></div>
+        </div>
+        <div>
+          <div class="progress"><div id="batteryBar"></div></div>
+          <div class="meta-grid">
+            <div class="meta"><div class="label">最後更新</div><div id="lastUpdate" class="value">尚無資料</div></div>
+            <div class="meta"><div class="label">OCR 信心</div><div id="confidence" class="value">--</div></div>
+            <div class="meta"><div class="label">下次偵測</div><div id="nextScan" class="value">--</div></div>
+            <div class="meta"><div class="label">相機</div><div id="cameraName" class="value">未連線</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="toolbar">
+          <h2>電量歷史</h2>
+          <div class="actions">
+            <select id="rangeSelect" aria-label="圖表時間範圍">
+              <option value="1">最近 1 小時</option>
+              <option value="6">最近 6 小時</option>
+              <option value="24" selected>最近 24 小時</option>
+              <option value="168">最近 7 天</option>
+              <option value="720">最近 30 天</option>
+            </select>
+            <a id="exportLink" class="button" href="/api/export.csv?hours=720">匯出 CSV</a>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="historyChart"></canvas></div>
+        <div id="chartSummary" class="muted">尚無讀值</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="toolbar">
+        <div>
+          <h2>相機與辨識區域</h2>
+          <div class="muted">用滑鼠或手指，只框住手機 App 上的電量數字；盡量不要包含 % 符號或其他數字。</div>
+        </div>
+        <button id="scanButton" class="primary">立即辨識</button>
+      </div>
+      <div class="camera-grid">
+        <div id="cameraStage" class="camera-stage">
+          <div id="cameraPlaceholder">等待非 RealSense USB 相機…</div>
+          <img id="cameraImage" alt="JinPei 相機即時畫面">
+          <canvas id="roiCanvas"></canvas>
+        </div>
+        <div class="side-stack">
+          <div>
+            <div class="muted">OCR 實際看到的區域</div>
+            <img id="roiPreview" class="roi-preview" alt="OCR 裁切預覽">
+          </div>
+          <div class="form-row"><label for="intervalInput">偵測間隔（秒）</label><input id="intervalInput" type="number" min="5" max="86400" step="1"></div>
+          <div class="form-row"><label for="thresholdInput">低電量警示（%）</label><input id="thresholdInput" type="number" min="0" max="100" step="1"></div>
+          <div class="form-row"><label for="confidenceInput">最低信心（0–100）</label><input id="confidenceInput" type="number" min="0" max="100" step="1"></div>
+          <div class="actions">
+            <button id="fullFrameButton">改用整張畫面</button>
+            <button id="saveButton" class="primary">儲存設定</button>
+          </div>
+          <div id="lastOcr" class="meta"><div class="label">最近一次 OCR</div><div class="value">尚未辨識</div></div>
+          <div id="uiError" class="error"></div>
+          <div class="notice">第一次使用一定要框選數字。這個頁面沒有帳號驗證，請只在可信任的機器人區域網路使用。</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const ui = {
+      status: $('statusPill'), battery: $('batteryValue'), bar: $('batteryBar'), lastUpdate: $('lastUpdate'),
+      confidence: $('confidence'), nextScan: $('nextScan'), cameraName: $('cameraName'), chart: $('historyChart'),
+      chartSummary: $('chartSummary'), range: $('rangeSelect'), exportLink: $('exportLink'), image: $('cameraImage'),
+      placeholder: $('cameraPlaceholder'), stage: $('cameraStage'), roiCanvas: $('roiCanvas'), roiPreview: $('roiPreview'),
+      interval: $('intervalInput'), threshold: $('thresholdInput'), minConfidence: $('confidenceInput'),
+      scan: $('scanButton'), save: $('saveButton'), full: $('fullFrameButton'), lastOcr: $('lastOcr'), error: $('uiError')
+    };
+    let config = {roi_x: 0, roi_y: 0, roi_width: 1, roi_height: 1, roi_calibrated: false};
+    let selection = null;
+    let dragStart = null;
+    let cameraReady = false;
+    let latestStatus = null;
+
+    function fmtTime(timestamp) {
+      return timestamp ? new Date(timestamp * 1000).toLocaleString('zh-TW', {hour12: false}) : '尚無資料';
+    }
+    async function api(path, options = {}) {
+      const response = await fetch(path, options);
+      const type = response.headers.get('content-type') || '';
+      const data = type.includes('json') ? await response.json() : await response.text();
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      return data;
+    }
+    function stateLabel(state) {
+      return {
+        ok: ['監測正常', 'ok'], low_battery: ['低電量', 'bad'], camera_disconnected: ['相機未連線', 'bad'],
+        needs_calibration: ['等待框選電量', 'warn'], ocr_warning: ['OCR 需調整', 'warn'], waiting_for_sample: ['等待第一次讀值', 'warn']
+      }[state] || ['初始化中', 'warn'];
+    }
+    function renderStatus(status) {
+      latestStatus = status;
+      config = status.config;
+      const [label, style] = stateLabel(status.state);
+      ui.status.textContent = label;
+      ui.status.className = `status-pill ${style}`;
+      const latest = status.latest;
+      const value = latest ? latest.percentage : null;
+      ui.battery.innerHTML = `${value === null ? '--' : value}<span>%</span>`;
+      ui.bar.style.width = `${value === null ? 0 : value}%`;
+      ui.bar.style.background = value !== null && value <= config.low_battery_threshold ? 'var(--red)' : 'var(--green)';
+      ui.lastUpdate.textContent = latest ? fmtTime(latest.timestamp) : '尚無資料';
+      ui.confidence.textContent = latest ? `${Math.round(latest.confidence)} / 100` : '--';
+      ui.cameraName.textContent = status.camera_connected ? (status.camera_label || status.camera_source) : '未連線';
+      ui.placeholder.style.display = status.camera_connected ? 'none' : 'block';
+      ui.stage.classList.toggle('ready', status.camera_connected);
+      ui.scan.disabled = !status.camera_connected;
+      const seconds = Math.max(0, Math.round(status.next_scan_timestamp - Date.now() / 1000));
+      ui.nextScan.textContent = `${seconds} 秒`;
+      if (status.last_attempt) {
+        const attempt = status.last_attempt;
+        const valueText = attempt.value === null || attempt.value === undefined ? '未讀到數字' : `${attempt.value}%`;
+        ui.lastOcr.querySelector('.value').textContent = `${valueText} · ${attempt.accepted ? '已接受' : '未採用'} · ${attempt.raw_text || attempt.reason}`;
+      }
+      ui.error.textContent = status.last_error || status.camera_error || '';
+      if (!document.activeElement || !['intervalInput', 'thresholdInput', 'confidenceInput'].includes(document.activeElement.id)) {
+        ui.interval.value = config.sample_interval;
+        ui.threshold.value = config.low_battery_threshold;
+        ui.minConfidence.value = config.minimum_confidence;
+      }
+      if (!selection && config.roi_calibrated) {
+        selection = {x: config.roi_x, y: config.roi_y, w: config.roi_width, h: config.roi_height};
+      }
+      drawRoi();
+    }
+    async function refreshStatus() {
+      try { renderStatus(await api('/api/status')); } catch (error) { ui.error.textContent = error.message; }
+    }
+    function refreshFrame() {
+      ui.image.src = `/api/frame.jpg?t=${Date.now()}`;
+      ui.roiPreview.src = `/api/roi.jpg?t=${Date.now()}`;
+    }
+    ui.image.onload = () => { cameraReady = true; resizeOverlay(); };
+    ui.image.onerror = () => { cameraReady = false; };
+    ui.roiPreview.onerror = () => ui.roiPreview.removeAttribute('src');
+
+    function resizeOverlay() {
+      const rect = ui.stage.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      ui.roiCanvas.width = Math.max(1, Math.round(rect.width * dpr));
+      ui.roiCanvas.height = Math.max(1, Math.round(rect.height * dpr));
+      drawRoi();
+    }
+    function pointFromEvent(event) {
+      const rect = ui.roiCanvas.getBoundingClientRect();
+      return {x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)), y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height))};
+    }
+    function drawRoi() {
+      const canvas = ui.roiCanvas;
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const width = canvas.width / dpr, height = canvas.height / dpr;
+      ctx.clearRect(0, 0, width, height);
+      if (!selection || !cameraReady) return;
+      const x = selection.x * width, y = selection.y * height, w = selection.w * width, h = selection.h * height;
+      ctx.fillStyle = 'rgba(0, 0, 0, .50)';
+      ctx.fillRect(0, 0, width, y); ctx.fillRect(0, y + h, width, height - y - h);
+      ctx.fillRect(0, y, x, h); ctx.fillRect(x + w, y, width - x - w, h);
+      ctx.strokeStyle = '#61aef7'; ctx.lineWidth = 3; ctx.strokeRect(x, y, w, h);
+      ctx.fillStyle = '#61aef7'; ctx.font = '600 13px system-ui'; ctx.fillText('電量辨識區域', x + 7, Math.max(16, y - 7));
+    }
+    ui.roiCanvas.addEventListener('pointerdown', (event) => {
+      if (!cameraReady) return;
+      dragStart = pointFromEvent(event); selection = {x: dragStart.x, y: dragStart.y, w: .001, h: .001};
+      ui.roiCanvas.setPointerCapture(event.pointerId); drawRoi();
+    });
+    ui.roiCanvas.addEventListener('pointermove', (event) => {
+      if (!dragStart) return;
+      const point = pointFromEvent(event);
+      selection = {x: Math.min(point.x, dragStart.x), y: Math.min(point.y, dragStart.y), w: Math.abs(point.x - dragStart.x), h: Math.abs(point.y - dragStart.y)};
+      drawRoi();
+    });
+    ui.roiCanvas.addEventListener('pointerup', () => { dragStart = null; });
+    window.addEventListener('resize', resizeOverlay);
+
+    ui.full.addEventListener('click', () => { selection = {x: 0, y: 0, w: 1, h: 1}; drawRoi(); });
+    ui.save.addEventListener('click', async () => {
+      if (!selection || selection.w < .01 || selection.h < .01) { ui.error.textContent = '請先在畫面框出電量數字。'; return; }
+      ui.save.disabled = true; ui.error.textContent = '';
+      try {
+        config = await api('/api/config', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({
+          roi_x: selection.x, roi_y: selection.y, roi_width: selection.w, roi_height: selection.h, roi_calibrated: true,
+          sample_interval: Number(ui.interval.value), low_battery_threshold: Number(ui.threshold.value), minimum_confidence: Number(ui.minConfidence.value)
+        })});
+        await api('/api/scan', {method: 'POST'});
+        setTimeout(refreshStatus, 700);
+      } catch (error) { ui.error.textContent = error.message; } finally { ui.save.disabled = false; }
+    });
+    ui.scan.addEventListener('click', async () => {
+      ui.scan.disabled = true; ui.error.textContent = '';
+      try { await api('/api/scan', {method: 'POST'}); setTimeout(refreshStatus, 700); }
+      catch (error) { ui.error.textContent = error.message; }
+      finally { setTimeout(() => { ui.scan.disabled = false; }, 1000); }
+    });
+
+    function drawChart(rows) {
+      const canvas = ui.chart, rect = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr);
+      const ctx = canvas.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const w = rect.width, h = rect.height, left = 42, right = 12, top = 12, bottom = 28;
+      ctx.clearRect(0, 0, w, h); ctx.font = '12px system-ui'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      [0, 25, 50, 75, 100].forEach(value => {
+        const y = top + (100 - value) / 100 * (h - top - bottom);
+        ctx.strokeStyle = '#273646'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(w - right, y); ctx.stroke();
+        ctx.fillStyle = '#8fa4b6'; ctx.fillText(`${value}%`, left - 7, y);
+      });
+      if (!rows.length) { ctx.textAlign = 'center'; ctx.fillStyle = '#8fa4b6'; ctx.fillText('這個時間範圍還沒有資料', w / 2, h / 2); return; }
+      const t0 = rows[0].timestamp, t1 = Math.max(t0 + 1, rows[rows.length - 1].timestamp);
+      const xFor = t => left + (t - t0) / (t1 - t0) * (w - left - right);
+      const yFor = v => top + (100 - v) / 100 * (h - top - bottom);
+      const gradient = ctx.createLinearGradient(0, top, 0, h - bottom); gradient.addColorStop(0, 'rgba(74,210,149,.36)'); gradient.addColorStop(1, 'rgba(74,210,149,0)');
+      ctx.beginPath(); rows.forEach((row, i) => { const x = xFor(row.timestamp), y = yFor(row.percentage); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+      ctx.lineTo(xFor(rows[rows.length - 1].timestamp), h - bottom); ctx.lineTo(xFor(rows[0].timestamp), h - bottom); ctx.closePath(); ctx.fillStyle = gradient; ctx.fill();
+      ctx.beginPath(); rows.forEach((row, i) => { const x = xFor(row.timestamp), y = yFor(row.percentage); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+      ctx.strokeStyle = '#4ad295'; ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.stroke();
+      ctx.fillStyle = '#8fa4b6'; ctx.textBaseline = 'bottom'; ctx.textAlign = 'left'; ctx.fillText(new Date(t0 * 1000).toLocaleString('zh-TW', {hour12: false}), left, h);
+      ctx.textAlign = 'right'; ctx.fillText(new Date(t1 * 1000).toLocaleString('zh-TW', {hour12: false}), w - right, h);
+      const values = rows.map(row => row.percentage);
+      ui.chartSummary.textContent = `${rows.length} 筆 · 最低 ${Math.min(...values)}% · 最高 ${Math.max(...values)}% · 最新 ${values[values.length - 1]}%`;
+    }
+    async function refreshHistory() {
+      const hours = ui.range.value; ui.exportLink.href = `/api/export.csv?hours=${hours}`;
+      try { drawChart(await api(`/api/history?hours=${hours}`)); } catch (error) { ui.error.textContent = error.message; }
+    }
+    ui.range.addEventListener('change', refreshHistory);
+    window.addEventListener('resize', () => { if (latestStatus) refreshHistory(); });
+
+    refreshStatus(); refreshHistory(); refreshFrame();
+    setInterval(refreshStatus, 2000); setInterval(refreshFrame, 1000); setInterval(refreshHistory, 15000);
+  </script>
+</body>
+</html>
