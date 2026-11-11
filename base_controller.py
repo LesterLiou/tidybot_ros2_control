@@ -478,7 +478,7 @@ class Vehicle:
 
 if __name__ == '__main__':
     vehicle = Vehicle(max_vel=(0.25, 0.25, 0.79))
-    #vehicle.get_encoder_offsets(); exit()
+    vehicle.get_encoder_offsets(); exit()
     vehicle.start_control()
     try:
         for _ in range(50):
