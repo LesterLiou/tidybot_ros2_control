@@ -1,0 +1,20 @@
+# Overlay docker-compose.yml to launch the controller directly instead of a shell.
+services:
+  tidybot:
+    ipc: host
+    environment:
+      ROS_DOMAIN_ID: '0'
+      RMW_IMPLEMENTATION: rmw_fastrtps_cpp
+      FASTDDS_BUILTIN_TRANSPORTS: LARGE_DATA
+    volumes:
+      - type: bind
+        source: ./launch/tidybot_control.launch.py
+        target: /opt/tidybot_control.launch.py
+        read_only: true
+        bind:
+          create_host_path: false
+    command:
+      - ros2
+      - launch
+      - /opt/tidybot_control.launch.py
+      - control_mode:=${TIDYBOT_CONTROL_MODE:-manual}

@@ -7,6 +7,128 @@
 > USB camera / Emirai phone battery OCR dashboard: see
 > [BATTERY_MONITOR.md](BATTERY_MONITOR.md).
 
+## ITRI 三台主機啟動與關閉
+
+| 在哪台執行 | 服務 | ROS domain |
+|---|---|---|
+| TidyBot NUC | 底盤驅動、Xbox 手把和本機 mux | 0 |
+| TidyBot NUC | D435 RGB 相機 | 84 |
+| THOR | Qwen／YOLO 推論和 ROS adapter | 84 |
+| RTX 5070 桌面 | VQA Monitor。需要導航時另開 RViz 和操作面板 | 84 |
+
+底盤指令從本 repo 執行。相機、推論與桌面指令使用 [三機整合 repo](https://github.com/LesterLiou/itri-retail-robot) 的共同候選 checkout。各機的 DDS peer、相機裝置映射和權重路徑使用當地 `.env`。這些服務可以分開啟停。只要看影像和 VQA，可以依序開相機、THOR、5070，底盤可保持關閉。
+
+### 1. TidyBot｜底盤與手把
+
+在 NUC 終端執行。第一次使用或需要重建時先執行 `docker compose build tidybot`。主機重開或 CANivore 重新插拔後，先在底盤停妥、驅動停止的狀態初始化 CAN。
+
+```bash
+cd /home/hrc/itri-retail-robot/tidybot_ros2_control
+docker compose run --rm can-init
+ls /dev/input/js*
+```
+
+確認 CAN 初始化成功、手把裝置存在，再開手動模式。若先前在容器內手動跑過 launch，先在該終端結束舊程序，避免同時跑兩套底盤控制。
+
+```bash
+TIDYBOT_CONTROL_MODE=manual \
+docker compose -f docker-compose.yml -f compose.control.yaml up -d tidybot
+docker compose -f docker-compose.yml -f compose.control.yaml logs -f tidybot
+```
+
+**B** 降低手把速度，**Y** 解鎖手把，同時按住 **LB＋RB** 才能用搖桿移動。鬆開肩鍵會撤回運動輸出，**Back** 解除手把授權並鎖定。離開日誌畫面按 `Ctrl+C`；關底盤前先鬆開肩鍵、按 Back 並確認停妥，再執行：
+
+```bash
+docker compose -f docker-compose.yml -f compose.control.yaml stop tidybot
+```
+
+#### Y 鍵、話題與導航模式
+
+| 功能 | ROS 介面 |
+|---|---|
+| Xbox 手把輸入 | `/joy`（`sensor_msgs/msg/Joy`），本 repo 的設定中 Y 是 `buttons[4]`，LB／RB 是 `buttons[6]`、`buttons[7]` |
+| 手把送給 mux | `/teleop/enable`（`Bool`）、`/teleop/cmd_vel`（`Twist`）、`/teleop/control_frame`（`String`）、`/teleop/stop`（`Empty`） |
+| 手動模式，mux 到馬達驅動 | `/tidybot/enable`（`Bool`）、`/cmd_vel`（`Twist`）、`/tidybot/control_frame`（`String`） |
+| 導航模式，mux 到本機閘門 | `/manual_control/tidybot/enable`、`/manual_control/cmd_vel`、`/manual_control/tidybot/control_frame` |
+| 唯讀狀態 | `/tidybot/control_status`、`/odom` |
+
+Y 由手把節點和 mux 讀取 `/joy`。只有手把資料新鮮且 LB＋RB 同時按住，才會有有效的手動運動許可。Nav2 的自動許可另外由實體防護訊號 `/tidybot/auto_interlock` 和 TidyBot 本機的 `/drive/arm_auto` 管理。
+
+現場已完成自動控制接線時，可在底盤停妥後切換同一個 Compose 服務：
+
+```bash
+TIDYBOT_CONTROL_MODE=navigation \
+docker compose -f docker-compose.yml -f compose.control.yaml up -d --force-recreate tidybot
+```
+
+這時手把仍用 Y 和 LB＋RB，手把請求經 `/manual_control/*` 到本機閘門。依整合 repo 的真機預檢、啟停及復歸流程啟動 `tidybot-bridge`、`tidybot-drive`。回到手動模式前先取消自動任務、撤銷自動許可、確認停妥並停止本機閘門，再用 `TIDYBOT_CONTROL_MODE=manual` 重建同一服務。
+
+### 2. TidyBot｜D435 相機
+
+```bash
+cd ~/itri-nav-candidates/live
+docker compose --project-directory . -f docker/compose.cross-host.yaml \
+  up -d --build tidybot-camera
+docker compose --project-directory . -f docker/compose.cross-host.yaml \
+  logs --tail=40 tidybot-camera
+```
+
+影像 topic 為 `/cameras/tidybot/color/image_raw/compressed`。關閉相機：
+
+```bash
+docker compose --project-directory . -f docker/compose.cross-host.yaml stop tidybot-camera
+```
+
+### 3. THOR｜Qwen／YOLO 推論
+
+```bash
+cd ~/itri-nav-candidates/live
+docker compose --project-directory . -f docker/compose.cross-host.yaml \
+  -f docker/compose.thor-qwen.yaml up -d --build --wait vqa-worker thor-adapter
+curl -fsS http://127.0.0.1:8090/health
+```
+
+`/health` 應顯示 `ready: true` 和 `model_backend: qwen3-vl`。模型載入後，由 `thor-adapter` 把相機影像送給 worker，並發布 `/perception/vqa/tidybot`。關閉推論：
+
+```bash
+docker compose --project-directory . -f docker/compose.cross-host.yaml \
+  -f docker/compose.thor-qwen.yaml stop thor-adapter vqa-worker
+```
+
+### 4. RTX 5070｜視覺介面
+
+在 5070 **桌面終端**執行。若已有 Monitor 視窗，先關閉舊視窗。
+
+```bash
+cd /home/lester/obstacle_avoid/.worktrees/tidybot-live-nav
+make gui-setup
+docker compose --project-directory . -f docker/compose.cross-host.yaml \
+  run --rm --no-deps --build --name itri-vqa-monitor-5070 monitor-5070
+```
+
+關閉視窗、在啟動終端按 `Ctrl+C`，或在另一個終端執行 `docker stop itri-vqa-monitor-5070`。相機和 THOR 可繼續運作。
+
+若已依整合 repo 完成真機導航預檢和接線，在同一個 5070 checkout 開操作面板。場地地圖與定位驗收後，可在啟動指令末尾加 `rviz-5070` 開啟 RViz。
+
+```bash
+NAV_DOMAIN_ID=84 NAV_TRANSPORT=LARGE_DATA \
+docker compose --project-directory . -p itri-navigation-live \
+  -f docker/compose.navigation.yaml -f docker/compose.navigation.fleet.yaml \
+  up -d --build panel-5070
+```
+
+結束導航時先按 **Cancel Mission**、確認停妥，再關介面：
+
+```bash
+docker compose --project-directory . -p itri-navigation-live \
+  -f docker/compose.navigation.yaml -f docker/compose.navigation.fleet.yaml \
+  stop panel-5070 rviz-5070
+```
+
+整套關機時，若底盤有活動任務，先取消任務、撤銷運動許可並確認停妥。再關閉底盤服務、5070 介面、THOR 推論、TidyBot 相機。
+
+舊操作紀錄見 [TidyBot Notion](https://app.notion.com/p/TidyBot-41533dec2935801ea150f7e677fcfad9)。
+
 This code release accompanies the following project:
 
 ### TidyBot++: An Open-Source Holonomic Mobile Manipulator for Robot Learning

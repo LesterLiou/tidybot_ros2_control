@@ -383,6 +383,27 @@ def test_status_reports_the_error_command_and_reason_forward_motion_is_blocked(g
     assert report['forward_blocked_by'] == []
 
 
+def test_y_only_arms_gamepad_and_both_shoulders_gate_output(graph):
+    graph.spin(0.15)
+    graph.buttons[4] = 1
+    graph.axes[1] = 0.8
+    graph.spin(0.15)
+    assert not graph.enabled and graph.command.linear.x == 0.0
+
+    graph.buttons[4] = 0
+    graph.buttons[6] = 1
+    graph.spin(0.15)
+    assert not graph.enabled and graph.command.linear.x == 0.0
+
+    graph.buttons[7] = 1
+    graph.spin(0.15)
+    assert graph.enabled and graph.command.linear.x > 0.0
+
+    graph.buttons[7] = 0
+    graph.spin(0.15)
+    assert not graph.enabled and graph.command.linear.x == 0.0
+
+
 def test_back_and_gamepad_loss_latch_stop(graph):
     graph.teach_and_start()
     graph.buttons[10] = 1
