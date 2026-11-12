@@ -36,11 +36,13 @@ docker compose -f compose.robot-base.yaml up -d tidybot
 docker compose -f compose.robot-base.yaml logs -f tidybot
 ```
 
-**B** 降低手把速度，**Y** 解鎖手把，同時按住 **LB＋RB** 才能用搖桿移動。鬆開肩鍵會撤回運動輸出，**Back** 解除手把授權並鎖定。離開日誌畫面按 `Ctrl+C`；關底盤前先鬆開肩鍵、按 Back 並確認停妥，再執行：
+**B** 降低手把速度，**Y** 解鎖手把，同時按住 **LB＋RB** 才能用搖桿移動。鬆開肩鍵會撤回運動輸出，**Back** 或 **Xbox／Guide** 解除手把授權並鎖定。離開日誌畫面按 `Ctrl+C`；關底盤前先鬆開肩鍵、按 Back 並確認停妥，再執行：
 
 ```bash
 docker compose -f compose.robot-base.yaml stop tidybot
 ```
+
+容器出現 `unhealthy` 時，可用 `docker compose -f compose.robot-base.yaml exec -T tidybot cat /tmp/tidybot-launch-status` 和 `docker compose -f compose.robot-base.yaml logs --tail=100 tidybot` 檢查。底盤 launch 故障後容器會保留，請排除供電、CAN 或節點錯誤後依整合 README 重新啟動。程式待機使用整合 repo 根目錄的 `compose.robot-standby.yaml`。
 
 #### Y 鍵、話題與導航模式
 

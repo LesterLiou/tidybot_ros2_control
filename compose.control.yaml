@@ -8,13 +8,26 @@ services:
       FASTDDS_BUILTIN_TRANSPORTS: LARGE_DATA
     volumes:
       - type: bind
+        source: ./scripts/control-supervisor.py
+        target: /opt/tidybot_control_supervisor.py
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
         source: ./launch/tidybot_control.launch.py
         target: /opt/tidybot_control.launch.py
         read_only: true
         bind:
           create_host_path: false
     command:
+      - python3
+      - /opt/tidybot_control_supervisor.py
       - ros2
       - launch
       - /opt/tidybot_control.launch.py
       - control_mode:=${TIDYBOT_CONTROL_MODE:-manual}
+    healthcheck:
+      test: [CMD, grep, -qx, LAUNCH_RUNNING, /tmp/tidybot-launch-status]
+      interval: 3s
+      timeout: 1s
+      retries: 2

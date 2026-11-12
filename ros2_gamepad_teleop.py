@@ -53,6 +53,7 @@ class GamepadTeleopNode(Node):
         self._button_dock = int(self.declare_parameter('button_dock', 0).value)
         self._button_rosbag = int(self.declare_parameter('button_rosbag', 11).value)
         self._button_shutdown = int(self.declare_parameter('button_shutdown', 12).value)
+        self._shutdown_on_guide = self.declare_parameter('shutdown_on_guide', True).value
         self._docking_start_service = str(
             self.declare_parameter('docking_start_service', '/docking/start').value
         )
@@ -191,7 +192,8 @@ class GamepadTeleopNode(Node):
 
         self.get_logger().info(
             'Press Y to arm; hold LB and RB together to move; release them and press A to dock; '
-            'press Menu to start/stop rosbag recording; press Xbox/Guide to close the launch.'
+            'press Menu to start/stop rosbag recording; press Xbox/Guide to '
+            + ('close the launch.' if self._shutdown_on_guide else 'disarm.')
         )
         self._log_speed('Initial')
 
@@ -211,16 +213,17 @@ class GamepadTeleopNode(Node):
         self._axes = list(msg.axes)
         self._last_joy_time = time.monotonic()
 
-        if self._rising_edge(self._button_shutdown):
+        guide_pressed = self._rising_edge(self._button_shutdown)
+        if guide_pressed and self._shutdown_on_guide:
             self._request_launch_shutdown()
             return
         if self._launch_shutdown_requested:
             return
 
-        if self._rising_edge(self._button_disarm):
+        if guide_pressed or self._rising_edge(self._button_disarm):
             self._armed = False
             self._stop_publisher.publish(Empty())
-            self._deactivate('Control disarmed with Back.')
+            self._deactivate('Control disarmed with Back or Guide.')
         elif self._rising_edge(self._button_arm):
             self._armed = True
             self.get_logger().info('Control armed. Hold LB and RB together to enable motion.')

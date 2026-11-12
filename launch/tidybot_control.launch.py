@@ -27,7 +27,8 @@ def control_nodes(context):
     return [
         start('joy_node', 'joy_node', 'joy'),
         start('gamepad_teleop', 'tidybot_gamepad_teleop',
-              overrides={'control_frame': 'local', 'require_both_deadman': True}, remappings=[
+              overrides={'control_frame': 'local', 'require_both_deadman': True,
+                         'shutdown_on_guide': False}, remappings=[
             ('/cmd_vel', '/teleop/cmd_vel'),
             ('/tidybot/enable', '/teleop/enable'),
             ('/tidybot/control_frame', '/teleop/control_frame'),

@@ -278,8 +278,9 @@ def test_gamepad_menu_button_toggles_rosbag_without_blocking_control(
     assert graph.teleop._rosbag_process is None
 
 
-def test_gamepad_guide_button_stops_robot_and_requests_launch_shutdown(
-        graph, monkeypatch):
+@pytest.mark.parametrize('shutdown_on_guide', [True, False])
+def test_gamepad_guide_button_stops_robot(graph, monkeypatch, shutdown_on_guide):
+    graph.teleop._shutdown_on_guide = shutdown_on_guide
     shutdown_signals = []
     monkeypatch.setattr(
         gamepad_module.os, 'kill',
@@ -294,11 +295,12 @@ def test_gamepad_guide_button_stops_robot_and_requests_launch_shutdown(
     graph.spin(0.15)
     assert graph.enabled and graph.command.linear.x > 0
 
-    graph.buttons[12] = 1  # Xbox/Guide requests the whole launch to exit.
+    graph.buttons[12] = 1
     graph.spin(0.2)
-    assert graph.teleop._launch_shutdown_requested
-    assert graph.teleop._launch_shutdown_signal_sent
-    assert shutdown_signals == [(os.getpid(), gamepad_module.signal.SIGINT)]
+    assert graph.teleop._launch_shutdown_requested == shutdown_on_guide
+    assert graph.teleop._launch_shutdown_signal_sent == shutdown_on_guide
+    assert shutdown_signals == ([(os.getpid(), gamepad_module.signal.SIGINT)]
+                                if shutdown_on_guide else [])
     assert graph.mux.stopped
     assert not graph.enabled and graph.command.linear.x == 0
 

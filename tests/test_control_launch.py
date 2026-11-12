@@ -22,6 +22,7 @@ def test_gamepad_mux_is_single_output_path(monkeypatch, mode):
     assert set(nodes) == {'joy_node', 'gamepad_teleop', 'control_mux', 'base_node'}
     assert nodes['base_node']['parameters'][-1]['require_enable']
     assert nodes['gamepad_teleop']['parameters'][-1]['require_both_deadman']
+    assert not nodes['gamepad_teleop']['parameters'][-1]['shutdown_on_guide']
     assert dict(nodes['gamepad_teleop']['remappings'])['/tidybot/enable'] == '/teleop/enable'
     mux_outputs = dict(nodes['control_mux']['remappings'])
     if mode == 'navigation':
